@@ -1,66 +1,85 @@
-from transformers import (AutoModel, AutoTokenizer,  AutoModelForCausalLM,
-                          Trainer, TrainingArguments, TrainerCallback,)
-import torch
-
 import dash
-import dash_core_components as dcc
-import dash_html_components as html
+from dash import html
+import dash_bootstrap_components as dbc
+from dash import Output, Input, State
 
-app = dash.Dash(__name__)
+external_stylesheets = [dbc.themes.LITERA]
+import model
 
-app.layout = html.Div([
-    html.H6("Change the value in the text box to see callbacks in action!"),
-    html.Div([
-        "Input: ",
-        dcc.Input(id='my-input', value='initial value', type='text')
-    ]),
-    html.Br(),
-    html.Div(id='my-output'),
+app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
 
+title_element = dbc.Container([
+    html.H3("Text Simplification model", className="display-3"),
+    html.P(
+        ["Practical Machine Learning and Deep Learning course project",
+         html.Br(),
+         html.B("Shamil Hastiev, Qazybek Askarbek and Lev Svalov")],
+        className="lead",
+        style={"marginLeft": 30}
+    ),
+    html.Hr(className="my-2")
+], style={"marginTop": 30})
+
+text_placeholder = dbc.Textarea(
+    placeholder="Input sentence in Russian, max - 200 symbols", maxLength=200, bs_size="lg",
+    id="text-placeholder",
+    style={"marginTop": 20}
+)
+
+button = html.Div([
+    dbc.Button(
+        "Run",
+        size="lg",
+        color="primary",
+        id="run-button",
+        style={"marginTop": 10, }
+    ),
+    html.Div(id="progress-div", style={"display": "inline-block", "marginLeft": 20, "marginTop": 30})
 ])
 
-MODEL = "sberbank-ai/rugpt3medium_based_on_gpt2"
-tokenizer = AutoTokenizer.from_pretrained(MODEL)
-model = AutoModelForCausalLM.from_pretrained(MODEL)
-special_tokens = {
-    "bos_token": "<|startoftext|>",
-    "pad_token": "<|pad|>",
-    "sep_token": "<|sep|>",
-}
-tokenizer.add_special_tokens(special_tokens)
-model.resize_token_embeddings(len(tokenizer))
-checkpoint = torch.load("simplification.pt", map_location=torch.device('cpu'))
-model.load_state_dict(checkpoint)
-MAX_LENGTH = 200
-model.eval()
+
+output_div = html.Div([
+    html.Div(id="output-1", style={"marginTop": 10}),
+    html.Div(id="output-2", style={"marginTop": 10}),
+    html.Div(id="output-3", style={"marginTop": 10}),
+    html.Div(id="output-4", style={"marginTop": 10}),
+    html.Div(id="output-5", style={"marginTop": 10}),
+], style={"marginTop": 50, "marginLeft": 30})
 
 
-def add_tokens(input):
-    return f"<|startoftext|>{input}<|sep|>"
+@app.callback(
+    Output("progress-div", "children"),
+    Input("run-button", "n_clicks"),
+    State("text-placeholder", "value"),
+    prevent_initial_call=True
+)
+def run_model_state(n_clicks, text):
+    if 200 > len(text) > 0:
+        return "Starting the model!"
+    return "Can not run the model, length of sentence should be from 1 to 200!"
 
 
-def transform_sentence(sentence):
-    sentence = add_tokens(sentence)
-    input = tokenizer.encode(sentence, return_tensors="pt")
-    with torch.no_grad():
-        sample_outputs = model.generate(
-            input,
-            do_sample=True,
-            top_k=50,
-            max_length=MAX_LENGTH,
-            top_p=0.95,
-            temperature=0.9,
-            num_return_sequences=5
-        ).detach().cpu()
-    results = []
-    for sample in sample_outputs:
-        res = (tokenizer.decode(sample, skip_special_tokens=False)
-               .split("<|sep|>")[1]
-               .replace("<|pad|>", "")
-               .replace("<|endoftext|>", ""))
-        results.append(res)
-    return results
+@app.callback(
+    Output("output-1", "children"),
+    Output("output-2", "children"),
+    Output("output-3", "children"),
+    Output("output-4", "children"),
+    Output("output-5", "children"),
+    Input("run-button", "n_clicks"),
+    State("text-placeholder", "value"),
+    prevent_initial_call=True
+)
+def get_result(n_clicks, text):
+    if 200 > len(text) > 0:
+        res = []
+        for i, s in enumerate(model.transform_sentence(text)):
+            res.append([html.B(str(i + 1)+".  ", style={"display": "inline-block", "marginLeft": 5}), s])
+        s1, s2, s3, s4, s5 = tuple(res)
+        return s1, s2, s3, s4, s5
 
+
+children = [title_element, text_placeholder, button, output_div]
+app.layout = dbc.Container(children=children)
 
 if __name__ == '__main__':
     app.run_server(debug=True)
